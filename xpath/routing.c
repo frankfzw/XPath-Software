@@ -209,12 +209,14 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	f.info.last_tx_time = pkt_tx_time;
 	f.info.last_reroute_time = now;
 
-	if (tcph->syn && unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
-		xpath_debug_info("XPath: insert flow fails\n");
-        goto out;
-    }
+    if (tcph->syn) {
+        path_index = tlb_where_to_route (path_index, f);
+        f.info.path_index = path_index;
+        if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
+		    xpath_debug_info("XPath: insert flow fails\n");
+        }
 
-    if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
+    } else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
 		path_index = flow_ptr->info.path_index;
 		/* delete the flow entry */
 		if ((tcph->fin || tcph->rst) && !xpath_delete_flow_table(&ft, &f)) {
