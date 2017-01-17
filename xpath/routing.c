@@ -227,8 +227,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
         bad_path_triggle = (flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh &&
 		    (tp->srtt_us << 3) >= xpath_tlb_rtt_high_thresh);
 
-        flowlet_triggle = ktime_to_us (ktime_sub (now, flow_ptr->info.last_tx_time))
-		    > xpath_flowlet_thresh
+        flowlet_triggle = (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) > xpath_flowlet_thresh);
 
 		/* reroute when current path is highly congested */
         if ((bad_path_triggle || flowlet_triggle) && // TLB has both bad path trigger and flowlet trigger
