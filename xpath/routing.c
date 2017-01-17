@@ -210,7 +210,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	f.info.last_reroute_time = now;
 
     if (tcph->syn) {
-        path_index = tlb_where_to_route (path_index, f);
+        path_index = tlb_where_to_route(path_index, path_ptr);
         f.info.path_index = path_index;
         if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
 		    xpath_debug_info("XPath: insert flow fails\n");
