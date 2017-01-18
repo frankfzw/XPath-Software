@@ -182,8 +182,8 @@ out:
 
 u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 {
-	const struct tcp_sock *tp = tcp_sk(skb->sk);
-	bool reroute = false;
+	// const struct tcp_sock *tp = tcp_sk(skb->sk);
+	// bool reroute = false;
 	ktime_t now = ktime_get();
 	/* When all bits of the packet have been pushed to the link */
 	ktime_t pkt_tx_time = ktime_add_ns(now, xpath_l2t_ns(skb->len));
@@ -200,8 +200,8 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 	struct xpath_flow_entry f, *flow_ptr = NULL;
 
-    bool bad_path_triggle = false;
-    bool flowlet_triggle = false;
+    // bool bad_path_triggle = false;
+    // bool flowlet_triggle = false;
 
 	xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
@@ -224,32 +224,44 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 			goto out;
 		}
 
-        bad_path_triggle = (flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh &&
-		    (tp->srtt_us << 3) >= xpath_tlb_rtt_high_thresh);
 
-        flowlet_triggle = (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) > xpath_flowlet_thresh);
+		// /* reroute when current path is highly congested */
+        // if (flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh && // TLB has both bad path trigger and flowlet trigger
+        // 	(tp->srtt_us << 3) >= xpath_tlb_rtt_high_thresh &&
+        //     flow_ptr->info.bytes_sent >= xpath_tlb_reroute_bytes_thresh &&
+		//     now.tv64 - flow_ptr->info.last_reroute_time.tv64 > 1000 *
+		//     xpath_tlb_reroute_time_thresh &&
+		//     random_number(100) < xpath_tlb_reroute_prob) {
+		// 	reroute = true;
+		// }
 
-		/* reroute when current path is highly congested */
-        if ((bad_path_triggle || flowlet_triggle) && // TLB has both bad path trigger and flowlet trigger
-            flow_ptr->info.bytes_sent >= xpath_tlb_reroute_bytes_thresh &&
-		    now.tv64 - flow_ptr->info.last_reroute_time.tv64 > 1000 *
-		    xpath_tlb_reroute_time_thresh &&
-		    random_number(100) < xpath_tlb_reroute_prob) {
-			reroute = true;
+		// /* find a path to reroute */
+		// if (reroute)
+		// 	path_index = tlb_where_to_route(path_index, path_ptr);
+
+		// /* not reroute or cannot find a better path */
+		// if (!reroute || path_index == flow_ptr->info.path_index) {
+		// 	flow_ptr->info.last_tx_time = pkt_tx_time;
+		// 	if (seq_after(seq, flow_ptr->info.seq_curr_path))
+		// 		flow_ptr->info.seq_curr_path = seq;
+		// 	flow_ptr->info.bytes_sent += payload_len;
+		// 	goto out;
+		// }
+        
+		/* flowlet */
+		if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time))
+		    > xpath_flowlet_thresh) {
+			path_index = tlb_where_to_route(path_index, path_ptr);			
 		}
 
-		/* find a path to reroute */
-		if (reroute)
-			path_index = tlb_where_to_route(path_index, path_ptr);
-
-		/* not reroute or cannot find a better path */
-		if (!reroute || path_index == flow_ptr->info.path_index) {
-			flow_ptr->info.last_tx_time = pkt_tx_time;
+		if (path_index == flow_ptr->info.path_index) {
 			if (seq_after(seq, flow_ptr->info.seq_curr_path))
 				flow_ptr->info.seq_curr_path = seq;
+			flow_ptr->info.last_tx_time = pkt_tx_time;
 			flow_ptr->info.bytes_sent += payload_len;
 			goto out;
 		}
+
 
 		/* update per-flow state for reroute */
 		flow_ptr->info.path_index = path_index;
@@ -257,7 +269,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		flow_ptr->info.last_reroute_time = now;
 		flow_ptr->info.seq_prev_path = flow_ptr->info.seq_curr_path;
 		flow_ptr->info.seq_curr_path = seq;
-		flow_ptr->info.bytes_sent = payload_len;
+		flow_ptr->info.bytes_sent += payload_len;
 	}
 
 out:
@@ -285,6 +297,11 @@ u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr
 	u16 i, path_index = current_path_index;
 	unsigned int path_group_id;
 	struct xpath_group_entry current_path = pg[path_ptr->path_group_ids[path_index]];
+
+	if (current_path_index >= path_ptr->num_paths || 
+		path_ptr->path_group_ids[current_path_index] >= XPATH_PATH_GROUP_SIZE) {
+		printk(KERN_INFO "%s", "Index out of bound");
+	}
 
 	/* randomly select a good path */
 	for (i = 0; i < path_ptr->num_paths - 1; i++) {
