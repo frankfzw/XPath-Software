@@ -9,16 +9,16 @@ int xpath_flowcell_thresh = 65536;	//64KB
 int xpath_flowlet_thresh = 800;	//800us
 int xpath_ack_prio = 1;	//enable ACK prioritization by default
 
-int xpath_tlb_ecn_low_thresh = 102;	//10%
-int xpath_tlb_ecn_high_thresh = 512;	//50%
+int xpath_tlb_ecn_low_thresh = 1025;	//10%
+int xpath_tlb_ecn_high_thresh = 1025;	//50%
 int xpath_tlb_rtt_low_thresh = 200;	//200us
 int xpath_tlb_rtt_high_thresh = 800;	//800us
 int xpath_tlb_reroute_bytes_thresh = 102400;	//100KB
 int xpath_tlb_reroute_time_thresh = 1000;	//1000us
 int xpath_tlb_reroute_rate_thresh = 450;	//450Mbps
 int xpath_tlb_reroute_prob = 50;	//50%
-int xpath_tlb_ecn_sample_us = 800;	//800us
-int xpath_tlb_ecn_sample_bytes = 30720;	//30KB
+int xpath_tlb_ecn_sample_us = 100;	//800us
+int xpath_tlb_ecn_sample_bytes = 3072;	//30KB
 
 int xpath_params_min[NUM_PARAMS] =
 {

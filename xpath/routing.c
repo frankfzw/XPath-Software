@@ -182,7 +182,8 @@ out:
 
 u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 {
-	const struct tcp_sock *tp = tcp_sk(skb->sk);
+	u16 i, path_group_id;	
+	// const struct tcp_sock *tp = tcp_sk(skb->sk);
 	bool reroute = false;
 	ktime_t now = ktime_get();
 	/* When all bits of the packet have been pushed to the link */
@@ -235,8 +236,22 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 			reroute = true;
 		}
 		/* find a path to reroute */
-		if (reroute)
+		if (reroute) {
+			printk(KERN_INFO "Current flow: %u, path_index %u, path_group_id %u, ecn %u\n", 
+				hash_key, path_index, path_ptr->path_group_ids[path_index], pg[path_ptr->path_group_ids[path_index]].ecn_fraction);
+
 			path_index = tlb_where_to_route(path_index, path_ptr);
+
+			printk(KERN_INFO "Reroute path_index %u, path_group_id %u\n", path_index, path_ptr->path_group_ids[path_index]);
+			for (i = 0; i < path_ptr->num_paths; i++) {
+				path_group_id = path_ptr->path_group_ids[i];
+				if (likely(path_group_id < XPATH_PATH_GROUP_SIZE)) {
+			            printk(KERN_INFO "\t%u, ecn: %u\n", path_group_id, pg[path_group_id].ecn_fraction);
+			    }
+	        }
+			// if (++path_index >= path_ptr->num_paths)
+			// 	path_index = 0;
+		}
 
 		/* not reroute or cannot find a better path */
 		if (!reroute || path_index == flow_ptr->info.path_index) {
@@ -284,13 +299,13 @@ u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr
 
 	/* randomly select a good path */
 	for (i = 0; i < path_ptr->num_paths - 1; i++) {
-		while (++path_index >= path_ptr->num_paths)
+		if (++path_index >= path_ptr->num_paths)
 			path_index -= path_ptr->num_paths;
 
 		path_group_id = path_ptr->path_group_ids[path_index];
 		if (likely(path_group_id < XPATH_PATH_GROUP_SIZE) &&
 		    is_good_path_group(pg[path_group_id]) &&
-	    	    pg[path_group_id].ecn_fraction < current_path.ecn_fraction) {
+	    	    pg[path_group_id].ecn_fraction <= current_path.ecn_fraction) {
 			goto out;
 		}
 	}
@@ -298,13 +313,13 @@ u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr
 	/* randomly select a gray path */
 	path_index = current_path_index;
 	for (i = 0; i < path_ptr->num_paths - 1; i++) {
-		while (++path_index >= path_ptr->num_paths)
+		if (++path_index >= path_ptr->num_paths)
 			path_index -= path_ptr->num_paths;
 
 		path_group_id = path_ptr->path_group_ids[path_index];
 		if (likely(path_group_id < XPATH_PATH_GROUP_SIZE) &&
 		    is_gray_path_group(pg[path_group_id]) &&
-	            pg[path_group_id].ecn_fraction < current_path.ecn_fraction) {
+	            pg[path_group_id].ecn_fraction <= current_path.ecn_fraction) {
 			goto out;
 		}
 	}
