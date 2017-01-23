@@ -9,7 +9,7 @@ int xpath_flowcell_thresh = 65536;	//64KB
 int xpath_flowlet_thresh = 800;	//800us
 int xpath_ack_prio = 1;	//enable ACK prioritization by default
 
-int xpath_tlb_ecn_low_thresh = 1025;	//10%
+int xpath_tlb_ecn_low_thresh = 200;	//10%
 int xpath_tlb_ecn_high_thresh = 512;	//50%
 int xpath_tlb_rtt_low_thresh = 200;	//200us
 int xpath_tlb_rtt_high_thresh = 800;	//800us

@@ -221,7 +221,7 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 	            (s64)xpath_tlb_ecn_sample_us) {
 	                spin_lock_irqsave(&(pg[age_path_group_id].lock), flags);
 	                pg[age_path_group_id].last_update_time = now;
-	                if (pg[age_path_group_id].ecn_fraction > 512) {
+	                if (pg[age_path_group_id].ecn_fraction > 256) {
 	                	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 6) >> 3;
 	                } else {
 	                	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 10) >> 3;
