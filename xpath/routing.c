@@ -246,14 +246,17 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		// if ((flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh && flow_ptr->info.bytes_sent >= xpath_tlb_reroute_bytes_thresh)
 		// 	|| ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) > xpath_flowlet_thresh) {
 		// if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) > xpath_flowlet_thresh) {
-		if ((pg[path_group_id].ecn_fraction > xpath_tlb_ecn_high_thresh) &&
-			(flow_ptr->info.bytes_sent > xpath_tlb_reroute_bytes_thresh)) {
+		if (((pg[path_group_id].ecn_fraction > xpath_tlb_ecn_high_thresh) &&
+			(flow_ptr->info.bytes_sent > xpath_tlb_reroute_bytes_thresh) &&
+			(quantized_dre(flow_ptr) <= 3)) || 
+                        ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) >= 5000) { // Timeout :)
 			reroute = true;
 		}
 		/* find a path to reroute */
 		if (reroute) {
-			printk(KERN_INFO "Current flow: %u, path_index %u, path_group_id %u, ecn %u\n",
-				hash_key, path_index, path_ptr->path_group_ids[path_index], pg[path_ptr->path_group_ids[path_index]].ecn_fraction);
+			printk(KERN_INFO "Current flow: %u, path_index %u, path_group_id %u, ecn %u, flow dre bytes:%u, flow dre: %u\n",
+				hash_key, path_index, path_ptr->path_group_ids[path_index], pg[path_ptr->path_group_ids[path_index]].ecn_fraction, 
+			flow_ptr->info.dre_bytes_sent, quantized_dre(flow_ptr));
 
 			path_index = tlb_where_to_route(path_index, path_ptr);
 
@@ -319,13 +322,14 @@ inline bool is_gray_path_group(struct xpath_group_entry group)
 
 inline unsigned int quantized_dre(struct xpath_flow_entry *flow_ptr)
 {
-	ktime_t now = ktime_get();
     // If null pointer we should definitely explicly return 0
     if (!flow_ptr) {
+	printk (KERN_INFO "null pointer\n");
         return 0;
     }
 
-    return (flow_ptr->info.dre_bytes_sent << 3 >> xpath_tlb_dre_capacity_bit << xpath_tlb_dre_quantized_bit ) * 10^6 / xpath_tlb_dre_t;
+    // return (((flow_ptr->info.dre_bytes_sent << 3 << xpath_tlb_dre_quantized_bit ) * 1000000) >> xpath_tlb_dre_capacity_bit) / xpath_tlb_dre_t;
+    return (flow_ptr->info.dre_bytes_sent * 8) / 80000;
 }
 
 /*
