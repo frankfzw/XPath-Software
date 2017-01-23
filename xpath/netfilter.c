@@ -216,12 +216,15 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 
         /* traverse all path groups and reset per-path-group state if long time no update */
         for (i = 0; i < path_ptr->num_paths; i++) {
+            // don't age itself
+            if (i == flow_ptr->info.path_index)
+                continue;
         	age_path_group_id = path_ptr->path_group_ids[i];
-		if (now.tv64 - pg[age_path_group_id].last_update_time.tv64 > 5000 *
+            if (now.tv64 - pg[age_path_group_id].last_update_time.tv64 > 5000 *
 	            (s64)xpath_tlb_ecn_sample_us) {
 	                spin_lock_irqsave(&(pg[age_path_group_id].lock), flags);
 	                pg[age_path_group_id].last_update_time = now;
-	                if (pg[age_path_group_id].ecn_fraction > 512) {
+	                if (pg[age_path_group_id].ecn_fraction > 200) {
 	                	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 6) >> 3;
 	                } else {
 	                	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 10) >> 3;
@@ -243,14 +246,18 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
         
         /* our measurement cycle is large enough */
         if (pg[path_group_id].bytes_acked > xpath_tlb_ecn_sample_bytes &&
-            now.tv64 - pg[path_group_id].last_ecn_update_time.tv64 > 1000 *
+            now.tv64 - pg[path_group_id].last_ecn_update_time.tv64 > 3000 *
             (s64)xpath_tlb_ecn_sample_us) {
                 /* sample fraction <= 1024 */
                 sample_fraction = (pg[path_group_id].bytes_ecn << 10) /
                                   pg[path_group_id].bytes_acked;
                 /* smooth = smooth * 0.25 + sample * 0.75 */
-                pg[path_group_id].ecn_fraction = (pg[path_group_id].ecn_fraction +
+                if (pg[path_group_id].bytes_acked > 30720) {
+                    pg[path_group_id].ecn_fraction = (pg[path_group_id].ecn_fraction +
                                                   3 * sample_fraction) >> 2;
+                } else {
+                    pg[path_group_id].ecn_fraction = (pg[path_group_id].ecn_fraction + sample_fraction) >> 1;
+                }
                 pg[path_group_id].bytes_acked = 0;
                 pg[path_group_id].bytes_ecn = 0;
                 pg[path_group_id].last_ecn_update_time = now;
