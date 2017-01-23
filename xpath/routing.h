@@ -3,6 +3,7 @@
 
 #include "path_table.h"
 #include "path_group.h"
+#include "flow_table.h"
 
 /* Different load balancing solutions, include:
  *      Equal-Cost Multi-Path (ECMP)
@@ -28,6 +29,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr);
 /* TLB related functions */
 inline bool is_good_path_group(struct xpath_group_entry group);
 inline bool is_gray_path_group(struct xpath_group_entry group);
+inline unsigned int quantized_dre(struct xpath_flow_entry *flow_ptr);
 u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr);
 
 #endif

@@ -182,7 +182,7 @@ out:
 
 u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 {
-	u16 i, path_group_id;	
+	u16 i, path_group_id;
 	// const struct tcp_sock *tp = tcp_sk(skb->sk);
 	// unsigned long flags;
 	bool reroute = false;
@@ -207,6 +207,8 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	f.info.path_index = path_index;
 	f.info.last_tx_time = pkt_tx_time;
 	f.info.last_reroute_time = now;
+    f.info.dre_bytes_sent = 0;
+    f.info.dre_last_update_time = now;
 
 	if (tcph->syn) {
 		path_index = tlb_where_to_route(path_index, path_ptr);
@@ -231,7 +233,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		// 	xpath_delete_flow_table(&ft, &f);
 		// 	goto out;
 		// }
-		
+
 		/* reroute when current path is highly congested */
 		// if (flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh &&
 		//     (tp->srtt_us << 3) >= xpath_tlb_rtt_high_thresh &&
@@ -250,7 +252,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		}
 		/* find a path to reroute */
 		if (reroute) {
-			printk(KERN_INFO "Current flow: %u, path_index %u, path_group_id %u, ecn %u\n", 
+			printk(KERN_INFO "Current flow: %u, path_index %u, path_group_id %u, ecn %u\n",
 				hash_key, path_index, path_ptr->path_group_ids[path_index], pg[path_ptr->path_group_ids[path_index]].ecn_fraction);
 
 			path_index = tlb_where_to_route(path_index, path_ptr);
@@ -272,6 +274,13 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 			if (seq_after(seq, flow_ptr->info.seq_curr_path))
 				flow_ptr->info.seq_curr_path = seq;
 			flow_ptr->info.bytes_sent += payload_len;
+            flow_ptr->info.dre_bytes_sent += payload_len;
+            if (ktime_to_us (ktime_sub (now, flow_ptr->info.dre_last_update_time)) >=
+                (xpath_tlb_dre_t >> xpath_tlb_dre_alpha_bit)) {
+                flow_ptr->info.dre_last_update_time = now;
+                flow_ptr->info.dre_bytes_sent -=
+                    (flow_ptr->info.dre_bytes_sent >> xpath_tlb_dre_alpha_bit);
+            }
 			goto out;
 		}
 
@@ -282,8 +291,8 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		flow_ptr->info.seq_prev_path = flow_ptr->info.seq_curr_path;
 		flow_ptr->info.seq_curr_path = seq;
 		flow_ptr->info.bytes_sent = payload_len;
-
-		
+        flow_ptr->info.dre_bytes_sent = payload_len;
+        flow_ptr->info.dre_last_update_time = now;
 	}
 
 out:
@@ -300,6 +309,23 @@ inline bool is_gray_path_group(struct xpath_group_entry group)
 {
 	return  group.ecn_fraction >= xpath_tlb_ecn_low_thresh &&
 		group.ecn_fraction < xpath_tlb_ecn_high_thresh;
+}
+
+
+inline unsigned int quantized_dre(struct xpath_flow_entry *flow_ptr)
+{
+	ktime_t now = ktime_get();
+    // If null pointer we should definitely explicly return 0
+    if (!flow_ptr) {
+        return 0;
+    }
+    // If the dre value has not been updated for a long time (larger than RTT),
+    // we should return 0 as well
+    if (ktime_to_us(ktime_sub(now, flow_ptr->info.dre_last_update_time)) >= xpath_tlb_dre_t) {
+        return 0;
+    }
+
+    return (flow_ptr->info.dre_bytes_sent << 3 >> xpath_tlb_dre_capacity_bit << xpath_tlb_dre_quantized_bit ) * 10^6 / xpath_tlb_dre_t;
 }
 
 /*

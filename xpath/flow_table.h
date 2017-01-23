@@ -26,6 +26,9 @@ struct xpath_flow_info
         u16 rate_mbps;  /* sending rate in Mbps */
         u32 bytes_sent_cycle;   /* bytes sent in current rate measurement cycle */
         ktime_t cycle_start_time;       /* start time of current rate measurement cycle */
+
+        u32 dre_bytes_sent; /* bytes sent in current path, which is used in dre calculation */
+        ktime_t dre_last_update_time; /* Last update time for dre degradation */
 };
 
 /* A TCP flow <local_ip, remote_ip, local_port, remote_port> */

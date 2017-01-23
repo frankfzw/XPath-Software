@@ -20,6 +20,11 @@ int xpath_tlb_reroute_prob = 50;	//50%
 int xpath_tlb_ecn_sample_us = 100;	//800us
 int xpath_tlb_ecn_sample_bytes = 3072;	//30KB
 
+unsigned int xpath_tlb_dre_alpha_bit = 2; // alpha = 1 >> (2^2) 0.25
+unsigned int xpath_tlb_dre_t = 160; // 160 us, which should be larger than RTT
+unsigned int xpath_tlb_dre_capacity_bit = 30; // 2^30 = 1 Gbps
+unsigned int xpath_tlb_dre_quantized_bit = 3; // 0 ~ 8
+
 int xpath_params_min[NUM_PARAMS] =
 {
 	ECMP,	//load balancing

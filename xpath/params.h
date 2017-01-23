@@ -68,7 +68,14 @@ extern int xpath_tlb_reroute_prob;
 extern int xpath_tlb_ecn_sample_us;
 /* TLB ECN minimum sample bytes */
 extern int xpath_tlb_ecn_sample_bytes;
-
+/* TLB DRE alpha bit, alpha = 1 >> xpath_tlb_dre_alpha_bit */
+extern unsigned int xpath_tlb_dre_alpha_bit;
+/* TLB DRE t, t = T_dre / alpha */
+extern unsigned int xpath_tlb_dre_t;
+/* TLB DRE quantized capacity */
+extern unsigned int xpath_tlb_dre_capacity_bit;
+/* TLB DRE quantized bit */
+extern unsigned int xpath_tlb_dre_quantized_bit;
 
 struct xpath_param
 {
