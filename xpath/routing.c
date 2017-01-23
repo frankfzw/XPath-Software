@@ -184,6 +184,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 {
 	u16 i, path_group_id;	
 	// const struct tcp_sock *tp = tcp_sk(skb->sk);
+	// unsigned long flags;
 	bool reroute = false;
 	ktime_t now = ktime_get();
 	/* When all bits of the packet have been pushed to the link */
@@ -216,7 +217,16 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 
 	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
 		path_index = flow_ptr->info.path_index;
-		/* delete the flow entry */
+
+		// update srrt
+		path_group_id = path_ptr->path_group_ids[path_index];
+		// if (tp) {
+  //       	spin_lock_irqsave(&(pg[path_group_id].lock), flags);
+		// 	pg[path_group_id].smooth_rtt_us = (pg[path_group_id].smooth_rtt_us + 3 * (tp->srtt_us >> 3)) >> 2;
+	 //        pg[path_group_id].last_rtt_update_time = now;
+  //       	spin_unlock_irqrestore(&(pg[path_group_id].lock), flags);
+		// }
+				/* delete the flow entry */
 		// if (tcph->fin || tcph->rst) {
 		// 	xpath_delete_flow_table(&ft, &f);
 		// 	goto out;
@@ -231,8 +241,11 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		//     random_number(100) < xpath_tlb_reroute_prob) {
 		// 	reroute = true;
 		// }
-		if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time))
-		    > xpath_flowlet_thresh) {
+		// if ((flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh && flow_ptr->info.bytes_sent >= xpath_tlb_reroute_bytes_thresh)
+		// 	|| ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) > xpath_flowlet_thresh) {
+		// if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) > xpath_flowlet_thresh) {
+		if ((pg[path_group_id].ecn_fraction > xpath_tlb_ecn_high_thresh) &&
+			(flow_ptr->info.bytes_sent > xpath_tlb_reroute_bytes_thresh)) {
 			reroute = true;
 		}
 		/* find a path to reroute */
@@ -246,7 +259,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 			for (i = 0; i < path_ptr->num_paths; i++) {
 				path_group_id = path_ptr->path_group_ids[i];
 				if (likely(path_group_id < XPATH_PATH_GROUP_SIZE)) {
-			            printk(KERN_INFO "\t%u, ecn: %u\n", path_group_id, pg[path_group_id].ecn_fraction);
+			            printk(KERN_INFO "\t%u, ecn: %u, srtt: %u\n", path_group_id, pg[path_group_id].ecn_fraction, pg[path_group_id].smooth_rtt_us);
 			    }
 	        }
 			// if (++path_index >= path_ptr->num_paths)
@@ -269,6 +282,8 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		flow_ptr->info.seq_prev_path = flow_ptr->info.seq_curr_path;
 		flow_ptr->info.seq_curr_path = seq;
 		flow_ptr->info.bytes_sent = payload_len;
+
+		
 	}
 
 out:

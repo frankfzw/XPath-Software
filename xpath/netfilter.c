@@ -217,7 +217,7 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
         /* traverse all path groups and reset per-path-group state if long time no update */
         for (i = 0; i < path_ptr->num_paths; i++) {
         	age_path_group_id = path_ptr->path_group_ids[i];
-		if (now.tv64 - pg[age_path_group_id].last_update_time.tv64 > 1000 *
+		if (now.tv64 - pg[age_path_group_id].last_update_time.tv64 > 5000 *
 	            (s64)xpath_tlb_ecn_sample_us) {
 	                spin_lock_irqsave(&(pg[age_path_group_id].lock), flags);
 	                pg[age_path_group_id].last_update_time = now;
@@ -225,6 +225,12 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 	                	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 6) >> 3;
 	                } else {
 	                	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 10) >> 3;
+	                }
+
+			if (pg[age_path_group_id].smooth_rtt_us > xpath_tlb_rtt_low_thresh) {
+	                	pg[age_path_group_id].smooth_rtt_us = (pg[age_path_group_id].smooth_rtt_us * 6) >> 3;
+	                } else {
+	                	pg[age_path_group_id].smooth_rtt_us = (pg[age_path_group_id].smooth_rtt_us * 10) >> 3;
 	                }
 	                spin_unlock_irqrestore(&(pg[age_path_group_id].lock), flags);
 	        }
@@ -234,7 +240,7 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
         pg[path_group_id].last_update_time = now;
         pg[path_group_id].bytes_acked += bytes_acked;
         pg[path_group_id].bytes_ecn += bytes_ecn;
-
+        
         /* our measurement cycle is large enough */
         if (pg[path_group_id].bytes_acked > xpath_tlb_ecn_sample_bytes &&
             now.tv64 - pg[path_group_id].last_ecn_update_time.tv64 > 1000 *

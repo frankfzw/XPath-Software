@@ -15,7 +15,7 @@ struct xpath_group_entry {
         ktime_t last_ecn_update_time;   //last time when we update ecn_fraction
 
         /* RTT information */
-        u16 smooth_rtt_us;      //smooth RTT in microsecond of this path group
+        u32 smooth_rtt_us;      //smooth RTT in microsecond of this path group
         ktime_t last_rtt_update_time;   //last time when we update RTT information
 
         /* sending rate information */
