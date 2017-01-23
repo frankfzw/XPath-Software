@@ -275,11 +275,16 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 				flow_ptr->info.seq_curr_path = seq;
 			flow_ptr->info.bytes_sent += payload_len;
             flow_ptr->info.dre_bytes_sent += payload_len;
-            if (ktime_to_us (ktime_sub (now, flow_ptr->info.dre_last_update_time)) >=
+            if (ktime_to_us(ktime_sub(now, flow_ptr->info.dre_last_update_time)) >=
                 (xpath_tlb_dre_t >> xpath_tlb_dre_alpha_bit)) {
                 flow_ptr->info.dre_last_update_time = now;
                 flow_ptr->info.dre_bytes_sent -=
                     (flow_ptr->info.dre_bytes_sent >> xpath_tlb_dre_alpha_bit);
+            }
+            if (ktime_to_us(ktime_sub(now, flow_ptr->info.dre_last_update_time)) >=
+                    xpath_tlb_dre_t) {
+                flow_ptr->info.dre_last_update_time = now;
+                flow_ptr->info.dre_bytes_sent = payload_len;
             }
 			goto out;
 		}
@@ -317,11 +322,6 @@ inline unsigned int quantized_dre(struct xpath_flow_entry *flow_ptr)
 	ktime_t now = ktime_get();
     // If null pointer we should definitely explicly return 0
     if (!flow_ptr) {
-        return 0;
-    }
-    // If the dre value has not been updated for a long time (larger than RTT),
-    // we should return 0 as well
-    if (ktime_to_us(ktime_sub(now, flow_ptr->info.dre_last_update_time)) >= xpath_tlb_dre_t) {
         return 0;
     }
 
