@@ -20,8 +20,6 @@ struct xpath_path_entry
         unsigned int *weights;    /* path weight, for clove */
         ktime_t *last_weight_reduce_times; /* last weight reduce time */
         struct hlist_node hlist;
-
-        spinlock_t lock;
 };
 
 /*

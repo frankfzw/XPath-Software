@@ -27,6 +27,7 @@ unsigned int xpath_tlb_dre_quantized_bit = 3; // 0 ~ 8
 
 unsigned int xpath_clove_init_weight = 64;
 unsigned int xpath_clove_reduce_gap = 200; // 200us
+unsigned int xpath_clove_weight_reset_threshold = 40;
 
 int xpath_params_min[NUM_PARAMS] =
 {

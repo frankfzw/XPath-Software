@@ -83,6 +83,8 @@ extern unsigned int xpath_tlb_dre_quantized_bit;
 extern unsigned int xpath_clove_init_weight;
 /* The time gap between weight reduction for CLOVE */
 extern unsigned int xpath_clove_reduce_gap;
+/* CLOVE weight reset threshold */
+extern unsigned int xpath_clove_weight_reset_threshold;
 
 struct xpath_param
 {

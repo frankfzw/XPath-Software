@@ -268,6 +268,10 @@ unsigned int xpath_clove_hook_func_in (const struct nf_hook_ops *ops,
 	struct xpath_flow_entry f, *flow_ptr = NULL;
     struct xpath_path_entry *path_ptr = NULL;
 	u32 ack_seq, prev_ack_seq;
+    unsigned int current_path_index = 0;
+    unsigned int path_index = 0;
+    unsigned int reduced_weight = 0;
+    unsigned int total_weight = 0;
 
     /* after decap outer IP header, we need to get the inner IP header */
 	iph = ip_hdr(skb);
@@ -303,6 +307,31 @@ unsigned int xpath_clove_hook_func_in (const struct nf_hook_ops *ops,
 
     if (!(path_ptr = xpath_search_path_table(&pt, iph->saddr)))
         goto out;
+
+    current_path_index = flow_ptr->info.path_index;
+
+    if (ktime_to_us(ktime_sub(now, path_ptr->last_weight_reduce_times[current_path_index]))
+            <= xpath_clove_reduce_gap)
+        goto out;
+    path_ptr->last_weight_reduce_times[current_path_index] = now;
+
+    reduced_weight = path_ptr->weights[current_path_index] / 3;
+    path_ptr->weights[current_path_index] -= reduced_weight;
+
+    for (path_index = 0; path_index < path_ptr->num_paths; ++path_index) {
+        if (path_index != current_path_index) {
+            path_ptr->weights[path_index] += (reduced_weight / (path_ptr->num_paths - 1));
+        }
+        total_weight += path_ptr->weights[path_index];
+    }
+
+    if (total_weight - path_ptr->num_paths * xpath_clove_init_weight > xpath_clove_weight_reset_threshold ||
+            path_ptr->num_paths * xpath_clove_init_weight - total_weight > xpath_clove_weight_reset_threshold) {
+        for (path_index = 0; path_index < path_ptr->num_paths; ++path_index) {
+            path_ptr->weights[path_index] =
+                path_ptr->weights[path_index] * (path_ptr->num_paths * xpath_clove_init_weight) / total_weight;
+        }
+    }
 
 out:
     return NF_ACCEPT;
