@@ -84,7 +84,7 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
         entry = vmalloc(sizeof(struct xpath_path_entry));
         new_path_ips = vmalloc(sizeof(unsigned int) * num_paths);
         new_path_group_ids = vmalloc(sizeof(unsigned int) * num_paths);
-        new_weights = vmalloc(sizeof(unsigned int) * num_paths);
+        new_weights = vmalloc(sizeof(u16) * num_paths);
         new_weight_reduce_times = vmalloc(sizeof(ktime_t) * num_paths);
 
 

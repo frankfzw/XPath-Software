@@ -93,6 +93,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                     break;
                 case CLOVE:
                     path_ip = clove_routing(skb, path_ptr);
+                    break;
                 default:
 			        printk(KERN_INFO "XPath: unknown LB scheme %d\n", xpath_load_balancing);
 		}
@@ -270,8 +271,8 @@ unsigned int xpath_clove_hook_func_in (const struct nf_hook_ops *ops,
 	u32 ack_seq, prev_ack_seq;
     unsigned int current_path_index = 0;
     unsigned int path_index = 0;
-    unsigned int reduced_weight = 0;
-    unsigned int total_weight = 0;
+    u16 reduced_weight = 0;
+    u16 total_weight = 0;
 
     /* after decap outer IP header, we need to get the inner IP header */
 	iph = ip_hdr(skb);

@@ -17,7 +17,7 @@ struct xpath_path_entry
         unsigned int *path_group_ids;   /* path group IDs (map path to a path group */
 
         atomic_t current_path;  /* current path index, for per-packet loac balancing */
-        unsigned int *weights;    /* path weight, for clove */
+        u16 *weights;    /* path weight, for clove */
         ktime_t *last_weight_reduce_times; /* last weight reduce time */
         struct hlist_node hlist;
 };

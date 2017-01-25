@@ -198,7 +198,9 @@ u32 clove_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 	struct xpath_flow_entry f, *flow_ptr = NULL;
 
-	u16 i, total_weight = 0, random_weight = 0;
+	u16 total_weight = 0, random_weight = 0;
+	unsigned int new_path_index;
+	unsigned int i;
 	u32 seq = (u32)ntohl(tcph->seq) + (payload_len > 1)? payload_len - 1 : 0;
 
 	xpath_init_flow_entry(&f);
@@ -211,6 +213,7 @@ u32 clove_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 
 	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
 		path_index = flow_ptr->info.path_index;
+		new_path_index = path_index;
 		/* delete the flow entry */
 		/*if (tcph->fin || tcph->rst) {
 			xpath_delete_flow_table(&ft, &f);
@@ -219,38 +222,38 @@ u32 clove_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		/* flowlet, update path id */
 		if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time))
 		    > xpath_flowlet_thresh) {
+
 			for (i = 0; i < path_ptr->num_paths; i++) {
 				total_weight += path_ptr->weights[i];
 			}
 			random_weight = random_number(total_weight);
 			for (i = 0; i < path_ptr->num_paths; i++) {
 				if (random_weight < path_ptr->weights[i]) {
+					new_path_index = i;
 					break;
 				}
 				random_weight -= path_ptr->weights[i];
 			}
 		}
 		// don't have to reroute
-		if (i == path_index) {
+		if (new_path_index == path_index || i >= path_ptr->num_paths) {
 			if (seq_after(seq, flow_ptr->info.seq_curr_path)) {
 				flow_ptr->info.seq_curr_path = seq;
 			}
 		} else {
 			// reroute
-			printk(KERN_INFO "Current flow: %u, path_index %u, weight %u, reroute to path %u",
-				hash_key, path_index, path_ptr->weights[path_index], i);
-
-			path_index = i;
-			flow_ptr->info.seq_prev_path = flow_ptr->info.seq_curr_path;
-			flow_ptr->info.seq_curr_path = seq;
-
+			printk(KERN_INFO "Current flow: %u, path_index %u, weight %u, reroute to %u",
+				hash_key, path_index, path_ptr->weights[path_index], new_path_index);
 			for (i = 0; i < path_ptr->num_paths; i++) {
 				printk(KERN_INFO "\t%u, weight: %u\n", i, path_ptr->weights[i]);
 	        }
-			
+	        
+			path_index = new_path_index;
+			flow_ptr->info.seq_prev_path = flow_ptr->info.seq_curr_path;
+			flow_ptr->info.seq_curr_path = seq;
+
 		}
 		flow_ptr->info.path_index = path_index;
-		flow_ptr->info.bytes_sent += payload_len;
 		flow_ptr->info.last_tx_time = pkt_tx_time;
 	}
 
