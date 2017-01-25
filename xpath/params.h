@@ -34,6 +34,8 @@
 #define LETFLOW 4
 /* Our solution: TLB */
 #define TLB 5
+/* Clove (HotNets'16) */
+#define CLOVE 6
 
 #define NUM_PARAMS 15
 
@@ -76,6 +78,11 @@ extern unsigned int xpath_tlb_dre_t;
 extern unsigned int xpath_tlb_dre_capacity_bit;
 /* TLB DRE quantized bit */
 extern unsigned int xpath_tlb_dre_quantized_bit;
+
+/* CLOVE initial weight */
+extern unsigned int xpath_clove_init_weight;
+/* The time gap between weight reduction for CLOVE */
+extern unsigned int xpath_clove_reduce_gap;
 
 struct xpath_param
 {

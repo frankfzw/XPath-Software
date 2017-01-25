@@ -43,7 +43,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
         struct tcphdr *tcph;
         struct xpath_path_entry *path_ptr = NULL;
         u32 path_ip = 0;	/* IP address of the path */
-	u32 payload_len = 0;	/* tcp payload length */
+	    u32 payload_len = 0;	/* tcp payload length */
 
         if (likely(out) && param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
                 return NF_ACCEPT;
@@ -127,39 +127,24 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
 	return NF_ACCEPT;
 }
 
-/* Hook function for incoming packets */
-static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
-                                       struct sk_buff *skb,
-                                       const struct net_device *in,
-                                       const struct net_device *out,
-                                       int (*okfn)(struct sk_buff *))
+static
+unsigned int xpath_tlb_hook_func_in (const struct nf_hook_ops *ops,
+                                     struct sk_buff *skb,
+                                     const struct net_device *in,
+                                     const struct net_device *out,
+                                     int (*okfn)(struct sk_buff *))
 {
-        ktime_t now = ktime_get();
-	struct iphdr *iph = ip_hdr(skb);
+    ktime_t now = ktime_get();
+	struct iphdr *iph = NULL;
 	struct tcphdr *tcph = NULL;
 	struct xpath_flow_entry f, *flow_ptr = NULL;
-        struct xpath_path_entry *path_ptr = NULL;
+    struct xpath_path_entry *path_ptr = NULL;
 	u32 ack_seq, prev_ack_seq, bytes_acked, bytes_ecn, sample_fraction;
-        unsigned int path_group_id;
+    unsigned int path_group_id;
 	unsigned long flags;
 	unsigned int i, age_path_group_id;
 
-	if (likely(in) && param_dev && strncmp(in->name, param_dev, IFNAMSIZ) != 0)
-                goto out;
-
-	if (unlikely(!iph) || iph->protocol != IPPROTO_IPIP)
-		goto out;
-
-	if (unlikely(!xpath_ipip_decap(skb))) {
-		printk(KERN_INFO "XPath: cannot remove IP header\n");
-		goto out;
-	}
-
-	/* Only TLB needs to update some states in RX path */
-	if (xpath_load_balancing != TLB)
-		goto out;
-
-	/* after decap outer IP header, we need to get the inner IP header */
+    /* after decap outer IP header, we need to get the inner IP header */
 	iph = ip_hdr(skb);
 	/* we only handle TCP ACK packets */
 	if (iph->protocol != IPPROTO_TCP || !(tcph = tcp_hdr(skb)) || !(tcph->ack))
@@ -172,101 +157,190 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 
 	/* initialize ACK Seq */
 	if (unlikely(flow_ptr->info.ack_seq == 0)) {
-                flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
-                goto out;
-        }
+        flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
+        goto out;
+    }
 
-        ack_seq = ntohl(tcph->ack_seq);
-        /* It should be an effective ACK */
+    ack_seq = ntohl(tcph->ack_seq);
+    /* It should be an effective ACK */
 	if (unlikely(!seq_after(ack_seq, flow_ptr->info.ack_seq)))
 		goto out;
 
-        prev_ack_seq = flow_ptr->info.ack_seq;
-        flow_ptr->info.ack_seq = ack_seq;
+    prev_ack_seq = flow_ptr->info.ack_seq;
+    flow_ptr->info.ack_seq = ack_seq;
 
-        /* we need to ensure that all bytes ACKed are sent in current path */
-        if (!seq_after_eq(prev_ack_seq, flow_ptr->info.seq_prev_path))
-                goto out;
+    /* we need to ensure that all bytes ACKed are sent in current path */
+    if (!seq_after_eq(prev_ack_seq, flow_ptr->info.seq_prev_path))
+        goto out;
 
-        bytes_acked = ack_seq - prev_ack_seq;
-        bytes_ecn = (tcph->ece) ? bytes_acked : 0;
-        flow_ptr->info.bytes_acked += bytes_acked;
-        flow_ptr->info.bytes_ecn += bytes_ecn;
-        /* calculate per-flow ECN fraction */
-        if (flow_ptr->info.bytes_acked > xpath_tlb_ecn_sample_bytes) {
-                /* sample fraction <= 1024 */
-                sample_fraction = (flow_ptr->info.bytes_ecn << 10) /
-                                  flow_ptr->info.bytes_acked;
-                /* smooth = smooth * 0.25 + sample * 0.75 */
-                flow_ptr->info.ecn_fraction = (flow_ptr->info.ecn_fraction +
-                                               sample_fraction * 3) >> 2;
-                flow_ptr->info.bytes_acked = 0;
-                flow_ptr->info.bytes_ecn = 0;
-        }
+    bytes_acked = ack_seq - prev_ack_seq;
+    bytes_ecn = (tcph->ece) ? bytes_acked : 0;
+    flow_ptr->info.bytes_acked += bytes_acked;
+    flow_ptr->info.bytes_ecn += bytes_ecn;
+    /* calculate per-flow ECN fraction */
+    if (flow_ptr->info.bytes_acked > xpath_tlb_ecn_sample_bytes) {
+        /* sample fraction <= 1024 */
+        sample_fraction = (flow_ptr->info.bytes_ecn << 10) /
+                           flow_ptr->info.bytes_acked;
+        /* smooth = smooth * 0.25 + sample * 0.75 */
+        flow_ptr->info.ecn_fraction = (flow_ptr->info.ecn_fraction +
+                                       sample_fraction * 3) >> 2;
+        flow_ptr->info.bytes_acked = 0;
+        flow_ptr->info.bytes_ecn = 0;
+    }
 
-        if (!(path_ptr = xpath_search_path_table(&pt, iph->saddr)))
-                goto out;
+    if (!(path_ptr = xpath_search_path_table(&pt, iph->saddr)))
+        goto out;
 
-        if (unlikely(flow_ptr->info.path_index >= path_ptr->num_paths))
-                goto out;
+    if (unlikely(flow_ptr->info.path_index >= path_ptr->num_paths))
+        goto out;
 
-        path_group_id = path_ptr->path_group_ids[flow_ptr->info.path_index];
-        if (unlikely(path_group_id >= XPATH_PATH_GROUP_SIZE))
-                goto out;
+    path_group_id = path_ptr->path_group_ids[flow_ptr->info.path_index];
+    if (unlikely(path_group_id >= XPATH_PATH_GROUP_SIZE))
+        goto out;
 
-        /* traverse all path groups and reset per-path-group state if long time no update */
-        for (i = 0; i < path_ptr->num_paths; i++) {
-            // don't age itself
-            // if (i == flow_ptr->info.path_index)
-            //     continue;
-        	age_path_group_id = path_ptr->path_group_ids[i];
-            if (now.tv64 - pg[age_path_group_id].last_update_time.tv64 > 5000 *
-	            (s64)xpath_tlb_ecn_sample_us) {
-	                spin_lock_irqsave(&(pg[age_path_group_id].lock), flags);
-	                pg[age_path_group_id].last_update_time = now;
-	                if (pg[age_path_group_id].ecn_fraction > 256) {
-	                	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 6) >> 3;
-	                } else {
-	                	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 10) >> 3;
-	                }
+    /* traverse all path groups and reset per-path-group state if long time no update */
+    for (i = 0; i < path_ptr->num_paths; i++) {
+        // don't age itself
+        // if (i == flow_ptr->info.path_index)
+        //     continue;
+        age_path_group_id = path_ptr->path_group_ids[i];
+        if (now.tv64 - pg[age_path_group_id].last_update_time.tv64 > 5000 *
+	        (s64)xpath_tlb_ecn_sample_us) {
+	            spin_lock_irqsave(&(pg[age_path_group_id].lock), flags);
+	            pg[age_path_group_id].last_update_time = now;
+	            if (pg[age_path_group_id].ecn_fraction > 256) {
+	               	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 6) >> 3;
+	            } else {
+	               	pg[age_path_group_id].ecn_fraction = (pg[age_path_group_id].ecn_fraction * 10) >> 3;
+	            }
 
-			if (pg[age_path_group_id].smooth_rtt_us > xpath_tlb_rtt_low_thresh) {
-	                	pg[age_path_group_id].smooth_rtt_us = (pg[age_path_group_id].smooth_rtt_us * 6) >> 3;
-	                } else {
-	                	pg[age_path_group_id].smooth_rtt_us = (pg[age_path_group_id].smooth_rtt_us * 10) >> 3;
-	                }
-	                spin_unlock_irqrestore(&(pg[age_path_group_id].lock), flags);
-	        }
-        }
-        
-        spin_lock_irqsave(&(pg[path_group_id].lock), flags);
-        pg[path_group_id].last_update_time = now;
-        pg[path_group_id].bytes_acked += bytes_acked;
-        pg[path_group_id].bytes_ecn += bytes_ecn;
-        
-        /* our measurement cycle is large enough */
-        if (pg[path_group_id].bytes_acked > xpath_tlb_ecn_sample_bytes &&
-            now.tv64 - pg[path_group_id].last_ecn_update_time.tv64 > 1000 *
-            (s64)xpath_tlb_ecn_sample_us) {
-                /* sample fraction <= 1024 */
-                sample_fraction = (pg[path_group_id].bytes_ecn << 10) /
-                                  pg[path_group_id].bytes_acked;
-                /* smooth = smooth * 0.25 + sample * 0.75 */
-                // if (pg[path_group_id].bytes_acked > 30720) {
-                    pg[path_group_id].ecn_fraction = (pg[path_group_id].ecn_fraction +
-                                                  3 * sample_fraction) >> 2;
-                // } else {
-                //     pg[path_group_id].ecn_fraction = (pg[path_group_id].ecn_fraction + sample_fraction) >> 1;
-                // }
-                pg[path_group_id].bytes_acked = 0;
-                pg[path_group_id].bytes_ecn = 0;
-                pg[path_group_id].last_ecn_update_time = now;
-        }
+			    if (pg[age_path_group_id].smooth_rtt_us > xpath_tlb_rtt_low_thresh) {
+	               	pg[age_path_group_id].smooth_rtt_us = (pg[age_path_group_id].smooth_rtt_us * 6) >> 3;
+	            } else {
+	               	pg[age_path_group_id].smooth_rtt_us = (pg[age_path_group_id].smooth_rtt_us * 10) >> 3;
+	            }
+	            spin_unlock_irqrestore(&(pg[age_path_group_id].lock), flags);
+	    }
+    }
 
-        spin_unlock_irqrestore(&(pg[path_group_id].lock), flags);
+    spin_lock_irqsave(&(pg[path_group_id].lock), flags);
+    pg[path_group_id].last_update_time = now;
+    pg[path_group_id].bytes_acked += bytes_acked;
+    pg[path_group_id].bytes_ecn += bytes_ecn;
+
+    /* our measurement cycle is large enough */
+    if (pg[path_group_id].bytes_acked > xpath_tlb_ecn_sample_bytes &&
+        now.tv64 - pg[path_group_id].last_ecn_update_time.tv64 > 1000 *
+        (s64)xpath_tlb_ecn_sample_us) {
+            /* sample fraction <= 1024 */
+            sample_fraction = (pg[path_group_id].bytes_ecn << 10) /
+                               pg[path_group_id].bytes_acked;
+            /* smooth = smooth * 0.25 + sample * 0.75 */
+            // if (pg[path_group_id].bytes_acked > 30720) {
+            pg[path_group_id].ecn_fraction = (pg[path_group_id].ecn_fraction +
+                                    3 * sample_fraction) >> 2;
+            // } else {
+            //     pg[path_group_id].ecn_fraction = (pg[path_group_id].ecn_fraction + sample_fraction) >> 1;
+            // }
+            pg[path_group_id].bytes_acked = 0;
+            pg[path_group_id].bytes_ecn = 0;
+            pg[path_group_id].last_ecn_update_time = now;
+    }
+
+    spin_unlock_irqrestore(&(pg[path_group_id].lock), flags);
 
 out:
-        return NF_ACCEPT;
+    return NF_ACCEPT;
+}
+
+static
+unsigned int xpath_clove_hook_func_in (const struct nf_hook_ops *ops,
+                                       struct sk_buff *skb,
+                                       const struct net_device *in,
+                                       const struct net_device *out,
+                                       int (*okfn)(struct sk_buff *))
+{
+    ktime_t now = ktime_get();
+	struct iphdr *iph = NULL;
+	struct tcphdr *tcph = NULL;
+	struct xpath_flow_entry f, *flow_ptr = NULL;
+    struct xpath_path_entry *path_ptr = NULL;
+	u32 ack_seq, prev_ack_seq;
+
+    /* after decap outer IP header, we need to get the inner IP header */
+	iph = ip_hdr(skb);
+	/* we only handle TCP ACK packets */
+	if (iph->protocol != IPPROTO_TCP || !(tcph = tcp_hdr(skb)) || !(tcph->ack))
+		goto out;
+
+	/* Note that the packet is from the reverse direction */
+	xpath_set_flow_4tuple(&f, iph->daddr, iph->saddr, ntohs(tcph->dest), ntohs(tcph->source));
+	if (unlikely(!(flow_ptr = xpath_search_flow_table(&ft, &f))))
+		goto out;
+
+	/* initialize ACK Seq */
+	if (unlikely(flow_ptr->info.ack_seq == 0)) {
+        flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
+        goto out;
+    }
+
+    ack_seq = ntohl(tcph->ack_seq);
+    /* It should be an effective ACK */
+	if (unlikely(!seq_after(ack_seq, flow_ptr->info.ack_seq)))
+		goto out;
+
+    prev_ack_seq = flow_ptr->info.ack_seq;
+    flow_ptr->info.ack_seq = ack_seq;
+
+    /* we need to ensure that all bytes ACKed are sent in current path */
+    if (!seq_after_eq(prev_ack_seq, flow_ptr->info.seq_prev_path))
+        goto out;
+
+    if (!tcph->ece)
+        goto out;
+
+    if (!(path_ptr = xpath_search_path_table(&pt, iph->saddr)))
+        goto out;
+
+out:
+    return NF_ACCEPT;
+
+}
+
+
+/* Hook function for incoming packets */
+static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
+                                       struct sk_buff *skb,
+                                       const struct net_device *in,
+                                       const struct net_device *out,
+                                       int (*okfn)(struct sk_buff *))
+{
+	struct iphdr *iph = ip_hdr(skb);
+
+	if (likely(in) && param_dev && strncmp(in->name, param_dev, IFNAMSIZ) != 0)
+        goto out;
+
+	if (unlikely(!iph) || iph->protocol != IPPROTO_IPIP)
+		goto out;
+
+	if (unlikely(!xpath_ipip_decap(skb))) {
+		printk(KERN_INFO "XPath: cannot remove IP header\n");
+		goto out;
+	}
+
+	/* Only TLB and CLOVE needs to update some states in RX path */
+    if (xpath_load_balancing == TLB) {
+        return xpath_tlb_hook_func_in (ops, skb, in, out, okfn);
+    } else if (xpath_load_balancing == CLOVE) {
+        return xpath_clove_hook_func_in (ops, skb, in, out, okfn);
+    } else {
+        goto out;
+    }
+
+out:
+    return NF_ACCEPT;
+
 }
 
 /* Install Netfilter hooks. Return true if it succeeds */

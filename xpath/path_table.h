@@ -3,6 +3,8 @@
 
 #include <linux/types.h>
 #include <linux/list.h>
+#include <linux/spinlock.h>
+#include <linux/ktime.h>
 
 /* Some paths from the same source host to the same destination host */
 struct xpath_path_entry
@@ -15,7 +17,11 @@ struct xpath_path_entry
         unsigned int *path_group_ids;   /* path group IDs (map path to a path group */
 
         atomic_t current_path;  /* current path index, for per-packet loac balancing */
+        unsigned int *weights;    /* path weight, for clove */
+        ktime_t *last_weight_reduce_times; /* last weight reduce time */
         struct hlist_node hlist;
+
+        spinlock_t lock;
 };
 
 /*
@@ -24,7 +30,7 @@ struct xpath_path_entry
  */
 struct xpath_path_table
 {
-        struct hlist_head *lists;      
+        struct hlist_head *lists;
 };
 
 /* Initialize XPath path table */

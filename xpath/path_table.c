@@ -66,6 +66,8 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
         struct xpath_path_entry *entry = NULL;
         struct hlist_node *ptr = NULL;
         unsigned int *new_path_ips = NULL, *new_path_group_ids = NULL;
+        unsigned int *new_weights = NULL;
+        ktime_t *new_weight_reduce_times = NULL;
 
         if (unlikely(!pt || !paths || num_paths == 0))
                 return false;
@@ -82,6 +84,9 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
         entry = vmalloc(sizeof(struct xpath_path_entry));
         new_path_ips = vmalloc(sizeof(unsigned int) * num_paths);
         new_path_group_ids = vmalloc(sizeof(unsigned int) * num_paths);
+        new_weights = vmalloc(sizeof(unsigned int) * num_paths);
+        new_weight_reduce_times = vmalloc(sizeof(ktime_t) * num_paths);
+
 
         if (unlikely(!entry || !new_path_ips || !new_path_group_ids)) {
                 vfree(entry);
@@ -94,6 +99,8 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
         for (i = 0; i < num_paths; i++) {
                 new_path_group_ids[i] = paths[i << 1];  //path group ID
                 new_path_ips[i] = paths[(i << 1) + 1];  //path IP
+                new_weights[i] = xpath_clove_init_weight;
+                new_weight_reduce_times[i] = ktime_set(0, 0);
         }
 
         /* insert a new entry */
@@ -103,6 +110,8 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
         entry->path_ips = new_path_ips;
         entry->path_group_ids = new_path_group_ids;
         atomic_set(&entry->current_path, 0);
+        entry->weights = new_weights;
+        entry->last_weight_reduce_times = new_weight_reduce_times;
         hlist_add_head(&entry->hlist, &pt->lists[index]);
         return true;
 }
