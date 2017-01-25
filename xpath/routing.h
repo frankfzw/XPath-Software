@@ -26,6 +26,7 @@ u32 letflow_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr
 
 u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr);
 
+u32 clove_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr);
 /* TLB related functions */
 inline bool is_good_path_group(struct xpath_group_entry group);
 inline bool is_gray_path_group(struct xpath_group_entry group);

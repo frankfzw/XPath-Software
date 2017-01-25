@@ -188,7 +188,7 @@ u32 clove_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	ktime_t pkt_tx_time = ktime_add_ns(now, xpath_l2t_ns(skb->len));
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *tcph = tcp_hdr(skb);
-	//u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
+	u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
 	u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
 					     iph->daddr,
 					     tcph->source,
@@ -222,9 +222,9 @@ u32 clove_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 			for (i = 0; i < path_ptr->num_paths; i++) {
 				total_weight += path_ptr->weights[i];
 			}
-			random_weight = random_number(total_weight)
+			random_weight = random_number(total_weight);
 			for (i = 0; i < path_ptr->num_paths; i++) {
-				if (random_weight < path->weights[i]) {
+				if (random_weight < path_ptr->weights[i]) {
 					break;
 				}
 				random_weight -= path_ptr->weights[i];
@@ -234,17 +234,26 @@ u32 clove_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		if (i == path_index) {
 			if (seq_after(seq, flow_ptr->info.seq_curr_path)) {
 				flow_ptr->info.seq_curr_path = seq;
+			}
 		} else {
 			// reroute
+			printk(KERN_INFO "Current flow: %u, path_index %u, weight %u, reroute to path %u",
+				hash_key, path_index, path_ptr->weights[path_index], i);
+
+			path_index = i;
 			flow_ptr->info.seq_prev_path = flow_ptr->info.seq_curr_path;
 			flow_ptr->info.seq_curr_path = seq;
+
+			for (i = 0; i < path_ptr->num_paths; i++) {
+				printk(KERN_INFO "\t%u, weight: %u\n", i, path_ptr->weights[i]);
+	        }
+			
 		}
-		flow_ptr->info.path_index = i;
+		flow_ptr->info.path_index = path_index;
 		flow_ptr->info.bytes_sent += payload_len;
 		flow_ptr->info.last_tx_time = pkt_tx_time;
 	}
 
-out:
 	/* Get path IP based on path index */
 	return path_ptr->path_ips[path_index];
 }
