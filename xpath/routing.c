@@ -164,10 +164,10 @@ out:
 	return path_ptr->path_ips[path_index];
 }
 
-/* generate a random number in [0, range). range <= 255 */
-static inline u8 random_number(u8 range)
+/* generate a random number in [0, range). range <= 65535 */
+static inline u16 random_number(u16 range)
 {
-	u8 result = 0;
+	u16 result = 0;
 
 	if (unlikely(range == 0))
 		goto out;
@@ -178,6 +178,75 @@ static inline u8 random_number(u8 range)
 
 out:
 	return result;
+}
+
+
+u32 clove_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
+{
+	ktime_t now = ktime_get();
+	/* When all bits of the packet have been pushed to the link */
+	ktime_t pkt_tx_time = ktime_add_ns(now, xpath_l2t_ns(skb->len));
+	struct iphdr *iph = ip_hdr(skb);
+	struct tcphdr *tcph = tcp_hdr(skb);
+	//u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
+	u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
+					     iph->daddr,
+					     tcph->source,
+					     tcph->dest);
+
+	/* hash_key_space = 1 << 16; path_index = hash_key * path_ptr->num_paths / region_size; */
+	u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+	struct xpath_flow_entry f, *flow_ptr = NULL;
+
+	u16 i, total_weight = 0, random_weight = 0;
+	u32 seq = (u32)ntohl(tcph->seq) + (payload_len > 1)? payload_len - 1 : 0;
+
+	xpath_init_flow_entry(&f);
+	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
+	f.info.path_index = path_index;
+	f.info.last_tx_time = pkt_tx_time;
+
+	if (tcph->syn && unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
+		xpath_debug_info("XPath: insert flow fails\n");
+
+	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
+		path_index = flow_ptr->info.path_index;
+		/* delete the flow entry */
+		/*if (tcph->fin || tcph->rst) {
+			xpath_delete_flow_table(&ft, &f);
+			goto out;
+		}*/		
+		/* flowlet, update path id */
+		if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time))
+		    > xpath_flowlet_thresh) {
+			for (i = 0; i < path_ptr->num_paths; i++) {
+				total_weight += path_ptr->weights[i];
+			}
+			random_weight = random_number(total_weight)
+			for (i = 0; i < path_ptr->num_paths; i++) {
+				if (random_weight < path->weights[i]) {
+					break;
+				}
+				random_weight -= path_ptr->weights[i];
+			}
+		}
+		// don't have to reroute
+		if (i == path_index) {
+			if (seq_after(seq, flow_ptr->info.seq_curr_path)) {
+				flow_ptr->info.seq_curr_path = seq;
+		} else {
+			// reroute
+			flow_ptr->info.seq_prev_path = flow_ptr->info.seq_curr_path;
+			flow_ptr->info.seq_curr_path = seq;
+		}
+		flow_ptr->info.path_index = i;
+		flow_ptr->info.bytes_sent += payload_len;
+		flow_ptr->info.last_tx_time = pkt_tx_time;
+	}
+
+out:
+	/* Get path IP based on path index */
+	return path_ptr->path_ips[path_index];
 }
 
 u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)

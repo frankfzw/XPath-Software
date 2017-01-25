@@ -73,27 +73,28 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                 }
 
                 switch (xpath_load_balancing) {
-                        case ECMP:
+                case ECMP:
 			        path_ip = ecmp_routing(skb, path_ptr);
 			        break;
-                        case PRESTO:
+                case PRESTO:
 			        path_ip = presto_routing(skb, path_ptr);
 			        break;
-                        case RPS:
-                                path_ip = rps_routing(skb, path_ptr);
-                                break;
-                        case FLOWBENDER:
-				path_ip = flowbender_routing(skb, path_ptr);
-				break;
-                        case LETFLOW:
-                                path_ip = letflow_routing(skb, path_ptr);
-                                break;
-                        case TLB:
-                                path_ip = tlb_routing(skb, path_ptr);
-                                break;
-                        default:
-			        printk(KERN_INFO "XPath: unknown LB scheme %d\n",
-                                                 xpath_load_balancing);
+                case RPS:
+                    path_ip = rps_routing(skb, path_ptr);
+                    break;
+                case FLOWBENDER:
+    				path_ip = flowbender_routing(skb, path_ptr);
+    				break;
+                case LETFLOW:
+                    path_ip = letflow_routing(skb, path_ptr);
+                    break;
+                case TLB:
+                    path_ip = tlb_routing(skb, path_ptr);
+                    break;
+                case CLOVE:
+                    path_ip = clove_routing(skb, path_ptr);
+                default:
+			        printk(KERN_INFO "XPath: unknown LB scheme %d\n", xpath_load_balancing);
 		}
 
                 /* find path IP, then construct tunnel (outer) IP header */
